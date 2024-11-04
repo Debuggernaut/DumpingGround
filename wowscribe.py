@@ -6,25 +6,27 @@ import subprocess
 input_directory = "/Volumes/Vid/"
 output_directory = "/Volumes/MacBak/RawAudio"
 
-def transcribe_audio_streams(vidname, input_file, audio_output_path):
+def transcribe_audio_streams(vidname, input_file, audio_output_path, skip_extraction=0):
 	for stream_index in range(3):  # Loop for streams 0 to 2
 		audio_path = os.path.join(audio_output_path, f"{vidname}_audio_{stream_index}.aac")
-		result = subprocess.run(["ffmpeg",
-			"-i",input_file,
-			"-map", f"0:a:{stream_index}",
-			"-c","copy",
-			audio_path],
-			capture_output=True)
+		if skip_extraction == 0:
+			result = subprocess.run(["ffmpeg",
+				"-i",input_file,
+				"-map", f"0:a:{stream_index}",
+				"-c","copy",
+				audio_path],
+				capture_output=True)
 
-		if result.returncode == 0:
+		if skip_extraction != 0 or result.returncode == 0:
 			print("Beginning transcription of " + audio_path)
 			text_path = os.path.join(audio_output_path, f"{vidname}_text_{stream_index}")
-			text = mlx_whisper.transcribe(audio_path, 
-				path_or_hf_repo="mlx-community/whisper-large-v3-turbo",
-				initial_prompt="This is a person playing World of Warcraft, an online game, with friends",
-				verbose=False) ["text"]
-			with open(text_path, 'w') as file:
-				file.write(text)
+			if os.path.exists(audio_path) and not os.path.exists(text_path):
+				text = mlx_whisper.transcribe(audio_path, 
+					path_or_hf_repo="mlx-community/whisper-large-v3-turbo",
+					initial_prompt="This is a person playing World of Warcraft, an online game, with friends",
+					verbose=False) ["text"]
+				with open(text_path, 'w') as file:
+					file.write(text)
 
 #killswitch = 5
 
@@ -56,16 +58,18 @@ def list_files_and_create_dirs(input_dir, output_dir):
 			new_dir_path = os.path.join(output_dir, dir_name)
 			
 			# Create the new directory
+			skip_extraction=0
 			try:
 				os.makedirs(new_dir_path)  # This will create the directory if it doesn't exist
 				print(f"Created directory: {new_dir_path}")
-				transcribe_audio_streams(dir_name, file_path, new_dir_path)
+			except FileExistsError:
+				print(f"Directory already exists: {new_dir_path}")
+				skip_extraction=1
+			transcribe_audio_streams(dir_name, file_path, new_dir_path, skip_extraction)
 				#killswitch = killswitch - 1
 				#if killswitch == 0:
 				#	print("KILL LIMIT HIT")
 				#	return
-			except FileExistsError:
-				print(f"Directory already exists: {new_dir_path}")
 
 
 list_files_and_create_dirs(input_directory, output_directory)
